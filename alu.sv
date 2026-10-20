@@ -18,16 +18,22 @@ typedef enum logic [2:0] {
 logic [WIDTH:0] ext_sum;
 logic [WIDTH-1:0] sum;
 logic [WIDTH-1:0] second;
+logic cin;
 logic cout;
 logic over;
 
 always_comb begin : opFSM
-    second = b;
+    // For SUB/SLT: invert b and inject carry-in of 1 (2's complement subtraction)
+    // This correctly produces the carry flag for all values of b, including b=0.
     if ((f == OP_SUB) || (f == OP_SLT)) begin
-        second = -b;
+        second = ~b;
+        cin = 1'b1;
+    end else begin
+        second = b;
+        cin = 1'b0;
     end
 
-    ext_sum = {1'b0, a} + {1'b0, second};
+    ext_sum = {1'b0, a} + {1'b0, second} + {{WIDTH{1'b0}}, cin};
     sum = ext_sum[WIDTH-1:0];
     cout = ext_sum[WIDTH];
     over = !(a[WIDTH-1] ^ second[WIDTH-1]) && (a[WIDTH-1] ^ sum[WIDTH-1]);
@@ -59,7 +65,10 @@ always_comb begin : opFSM
             carry = '0;
         end
         OP_SLT: begin
-            result = (a[WIDTH-1] != b[WIDTH-1]) ? a[WIDTH-1] : sum[WIDTH-1];
+            // Expose adder carry and overflow (textbook Fig 5.18b)
+            carry = cout;
+            overflow = over;
+            result = {{(WIDTH-1){1'b0}}, over ^ sum[WIDTH-1]};
         end
         default: begin
             result = '0;
